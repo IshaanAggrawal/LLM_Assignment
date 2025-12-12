@@ -93,5 +93,4 @@ Here is exactly how I calculated the metrics requested in the assignment PDF:
 
 This solution is not just a script; it's a production-ready microservice architecture designed for performance, security, and maintainability.
 
-
 ![alt text](image.png)
