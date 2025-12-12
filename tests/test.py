@@ -1,62 +1,52 @@
-import json
 import requests
 import os
+import json
 
-API_URL = "http://localhost:8000/api/v1/evaluate"
-DATA_DIR = "data"
+# Configuration
+API_URL = "http://localhost:8000/api/v1/evaluate/batch"
+CHAT_PATH = "data/chats/sample-chat-conversation-01.json"
+VECTOR_PATH = "data/vectors/sample_context_vectors-01.json"
 
-def load_json(subfolder, filename):
-    path = os.path.join(DATA_DIR, subfolder, filename)
-    try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"Error: {path} not found.")
-        return None
-
-def run_test():
-    print("--- Starting Local Test ---")
-    
-    # 1. Load Data
-    chat_data = load_json("chats", "sample-chat-conversation-01.json")
-    vector_data = load_json("vectors", "sample_context_vectors-01.json")
-    
-    if not chat_data or not vector_data:
+def run_batch_test():
+    # 1. Verify files exist
+    if not os.path.exists(CHAT_PATH) or not os.path.exists(VECTOR_PATH):
+        print("Error: Could not find data files.")
+        print(f"Checked: {CHAT_PATH}")
+        print(f"Checked: {VECTOR_PATH}")
         return
 
-    # 2. Setup Payload (Targeting Turn 14 - The Hallucination)
-    turns = chat_data.get('chat_conversation', {}).get('conversation_turns', chat_data.get('conversation_turns', []))
-    target_turn = 14
-    
-    context_texts = [item['text'] for item in vector_data['data']['vector_data']]
-    
-    # Extract Q&A pair
-    user_q, ai_ans, u_time, a_time = "", "", "", ""
-    for i, t in enumerate(turns):
-        if t['turn'] == target_turn:
-            ai_ans = t['message']
-            a_time = t['created_at']
-            user_q = turns[i-1]['message']
-            u_time = turns[i-1]['created_at']
-            break
+    print(f"--- Uploading Batch Files to {API_URL} ---")
+    print(f"Chat File:   {CHAT_PATH}")
+    print(f"Vector File: {VECTOR_PATH}")
 
-    payload = {
-        "conversation_id": chat_data.get('chat_id', 123),
-        "user_query": user_q,
-        "ai_response": ai_ans,
-        "context_texts": context_texts,
-        "user_timestamp": u_time,
-        "ai_timestamp": a_time
+    # 2. Prepare the files for upload
+    # We open them in binary mode ('rb') to ensure safe transmission
+    files = {
+        'chat_file': ('chat.json', open(CHAT_PATH, 'rb'), 'application/json'),
+        'vector_file': ('vectors.json', open(VECTOR_PATH, 'rb'), 'application/json')
     }
 
-    # 3. Send to API
-    print(f"Evaluating Turn {target_turn}...")
     try:
-        res = requests.post(API_URL, json=payload)
-        res.raise_for_status()
-        print(json.dumps(res.json(), indent=2))
+        # 3. Send POST request
+        response = requests.post(API_URL, files=files)
+        
+        # 4. Handle Response
+        if response.status_code == 200:
+            print("\n✅ Success! Evaluation Result:")
+            print(json.dumps(response.json(), indent=2))
+        else:
+            print(f"\n❌ Error {response.status_code}:")
+            print(response.text)
+
+    except requests.exceptions.ConnectionError:
+        print("\n❌ Connection Failed. Is the server running?")
+        print("Run: uvicorn src.main:app --reload")
     except Exception as e:
-        print(f"Request Failed: {e}")
+        print(f"\n❌ Unexpected Error: {e}")
+    finally:
+        # Always close file handles
+        files['chat_file'][1].close()
+        files['vector_file'][1].close()
 
 if __name__ == "__main__":
-    run_test()
+    run_batch_test()

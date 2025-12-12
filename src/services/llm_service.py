@@ -10,7 +10,7 @@ class GroqClient:
     def get_json_response(self, prompt: str) -> dict:
         try:
             completion = client.chat.completions.create(
-                model="llama3-70b-8192",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": "You are a strict QA Auditor. Output ONLY valid JSON."},
                     {"role": "user", "content": prompt}
