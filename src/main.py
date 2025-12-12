@@ -7,16 +7,13 @@ from slowapi.errors import RateLimitExceeded
 from src.core.config import settings
 from src.routes import eval_routes
 
-# SECURITY: Initialize Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
-# SECURITY: Register Limit Handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# SECURITY: CORS Policy
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # In prod, replace with ["http://localhost:3000"]

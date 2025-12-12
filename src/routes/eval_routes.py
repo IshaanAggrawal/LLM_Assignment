@@ -3,20 +3,15 @@ import httpx
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-
 from src.models.schemas import EvaluationRequest, EvaluationResult, BatchLinkRequest
 from src.services.audit_service import AuditService
-
-# Initialize Router (No API Key Dependency)
 router = APIRouter()
 
 audit_service = AuditService()
 limiter = Limiter(key_func=get_remote_address)
 
-# --- Helper: Universal Parser ---
 def extract_context_and_turn(chat_data, vector_data, target_turn):
     try:
-        # 1. Extract Context
         if 'data' in vector_data and 'vector_data' in vector_data['data']:
             vector_items = vector_data['data']['vector_data']
         else:
@@ -24,7 +19,6 @@ def extract_context_and_turn(chat_data, vector_data, target_turn):
         
         context_texts = [item.get('text', '') for item in vector_items]
 
-        # 2. Extract Turn
         turns = chat_data.get('chat_conversation', {}).get('conversation_turns', chat_data.get('conversation_turns', []))
         
         for i, turn in enumerate(turns):
@@ -43,7 +37,6 @@ def extract_context_and_turn(chat_data, vector_data, target_turn):
         print(f"Parsing Error: {e}")
         return None
 
-# --- Route 1: Standard Evaluation ---
 @router.post("/evaluate", response_model=EvaluationResult)
 @limiter.limit("10/minute") # Rate Limit Kept
 async def evaluate(request: Request, payload: EvaluationRequest):
@@ -52,15 +45,13 @@ async def evaluate(request: Request, payload: EvaluationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Route 2: File Upload (Batch) ---
 @router.post("/evaluate/batch")
-@limiter.limit("5/minute") # Rate Limit Kept
+@limiter.limit("5/minute")
 async def evaluate_batch_file(request: Request, chat_file: UploadFile = File(...), vector_file: UploadFile = File(...)):
     try:
         chat_content = await chat_file.read()
         vector_content = await vector_file.read()
         
-        # Default to turn 14 if using file upload (or you can add logic to extract from filename)
         req_payload = extract_context_and_turn(json.loads(chat_content), json.loads(vector_content), target_turn=14)
         
         if not req_payload:
@@ -70,9 +61,8 @@ async def evaluate_batch_file(request: Request, chat_file: UploadFile = File(...
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Route 3: URL Evaluation (Links) ---
 @router.post("/evaluate/batch-url")
-@limiter.limit("5/minute") # Rate Limit Kept
+@limiter.limit("5/minute")
 async def evaluate_batch_url(request: Request, payload: BatchLinkRequest):
     async with httpx.AsyncClient(follow_redirects=True) as client:
         try:

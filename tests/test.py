@@ -16,7 +16,7 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 def start_file_server():
     os.chdir(DATA_DIR) 
     with socketserver.TCPServer(("", FILE_SERVER_PORT), QuietHandler) as httpd:
-        print(f"📂 Temporary File Server started at port {FILE_SERVER_PORT}...")
+        print(f"Temporary File Server started at port {FILE_SERVER_PORT}...")
         httpd.serve_forever()
 
 def run_simulation():
@@ -28,7 +28,7 @@ def run_simulation():
     vector_url = f"http://localhost:{FILE_SERVER_PORT}/vectors/sample_context_vectors-02.json"
     target_turn = 15
 
-    print(f"\n🔗 Testing Link Evaluation Route (Target Turn: {target_turn})...")
+    print(f"\n Testing Link Evaluation Route (Target Turn: {target_turn})...")
     
     payload = {
         "chat_url": chat_url,
@@ -36,19 +36,18 @@ def run_simulation():
         "target_turn": target_turn
     }
 
-    # NO HEADERS NEEDED NOW
     try:
         response = requests.post(API_URL, json=payload)
         
         if response.status_code == 200:
-            print("\n✅ SUCCESS! Evaluation Complete.")
+            print("\n SUCCESS! Evaluation Complete.")
             print(json.dumps(response.json(), indent=2))
         else:
-            print(f"\n❌ FAILED with code {response.status_code}")
+            print(f"\n FAILED with code {response.status_code}")
             print(response.text)
             
     except requests.exceptions.ConnectionError:
-        print("\n❌ Error: Main API (port 8000) is not running.")
+        print("\n Error: Main API (port 8000) is not running.")
 
 if __name__ == "__main__":
     run_simulation()

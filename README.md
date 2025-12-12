@@ -1,6 +1,3 @@
-Okay, I understand. You want to edit the previous response to make it look less like AI-generated content and more like a human engineer's documentation, specifically highlighting the security features and architectural decisions.
-
-Here is the revised, more "human-engineered" version for your `README.md` or report.
 
 ### **1. Architecture Overview**
 
