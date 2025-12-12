@@ -4,9 +4,10 @@ from datetime import datetime
 
 class EvaluationRequest(BaseModel):
     conversation_id: int
-    user_query: str
-    ai_response: str
-    context_texts: List[str]
+    user_query: str = Field(..., max_length=10000) 
+    ai_response: str = Field(..., max_length=20000)
+    context_texts: List[str] = Field(..., max_items=50)
+    
     user_timestamp: Optional[str] = None
     ai_timestamp: Optional[str] = None
 
@@ -15,7 +16,6 @@ class EvaluationRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("AI Response cannot be empty")
         return v
-
 class EvaluationResult(BaseModel):
     conversation_id: int
     relevance_score: float = Field(..., ge=0, le=1)
@@ -25,7 +25,7 @@ class EvaluationResult(BaseModel):
     reasoning: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-# --- NEW: Add this for Link Support ---
 class BatchLinkRequest(BaseModel):
     chat_url: str
     vector_url: str
+    target_turn: int = 14

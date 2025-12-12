@@ -8,8 +8,10 @@ class Settings:
     VERSION: str = "1.0.0"
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     ENV: str = os.getenv("ENV", "development")
-    INPUT_COST_PER_1K: float = 0.00059
-    OUTPUT_COST_PER_1K: float = 0.00079
+    
+    # Cost Constants (Llama-3.1-8B)
+    INPUT_COST_PER_1K: float = 0.00005
+    OUTPUT_COST_PER_1K: float = 0.00008
 
     @classmethod
     def validate(cls):
