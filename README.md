@@ -7,28 +7,33 @@ I chose a **Microservice Architecture** implementing the "Service-Repository" pa
 
 ```mermaid
 graph TD
-    User[Client or Test Script] -->|HTTP POST| Gateway[API Gateway - FastAPI]
+    User[User Client] -->|1. Chat Message| API[FastAPI Gateway]
     
-    subgraph Security_Layer
-        Gateway -->|Rate Limit| Limiter[SlowAPI Rate Limiter]
-        Gateway -->|CORS Check| CORS[CORS Middleware]
-        Limiter -->|Validate Payload| Validator[Pydantic Validation]
+    subgraph "Hot Path (Real-Time Response)"
+        API -->|2. Generate Reply| ChatBot[Chatbot Engine]
+        ChatBot -->|3. Response (<2s)| User
     end
-    
-    subgraph Application_Logic
-        Validator -->|Valid Data| Router[Evaluation Router]
-        Router -->|Run Audit| AuditService[Audit Service]
+    subgraph "Cold Path (Async Evaluation)"
+        API -.->|4. Fire-and-Forget| Queue[Background Task Queue]
+        Queue -->|5. Process| Worker[Audit Service]
+        
+        %% Layer 0: Cache
+        Worker -->|Layer 0| Cache{Check Cache}
+        Cache -->|Hit (0ms)| DB[(Results DB)]
+        
+        %% Layer 1: Guardrails
+        Cache -->|Miss| L1{Layer 1: Guardrails}
+        L1 -->|Fail| DB
+        
+        %% Layer 2: The Scout
+        L1 -->|Pass| L2{Layer 2: Llama-8B}
+        L2 -->|Confident (>0.9)| DB
+        
+        %% Layer 3: The Judge
+        L2 -->|Unsure (<0.9)| L3[Layer 3: Llama-70B]
+        L3 -->|Final Verdict| DB
+        L3 -.->|Update| Cache
     end
-    
-    subgraph Infrastructure
-        AuditService -->|Build Prompt| LLMClient[LLM Wrapper]
-        LLMClient -->|Retry Logic| Resilience[Tenacity Retry System]
-        Resilience -->|Inference| GroqCloud[Groq LPU Cloud]
-    end
-    
-    GroqCloud -->|LLM Output| AuditService
-    AuditService -->|Evaluation JSON| User
-
 ```
 
 #### **Tech Stack Decisions**
@@ -92,5 +97,29 @@ Here is exactly how I calculated the metrics requested in the assignment PDF:
         2.  **Tiered Evaluation:** The architecture supports swapping models (e.g., 8B for fast checks, 70B for deep audits) to balance speed and accuracy at scale.
 
 This solution is not just a script; it's a production-ready microservice architecture designed for performance, security, and maintainability.
+🛡️ BeyondChats LLM EvaluatorA High-Performance, Scalable Microservice for RAG EvaluationThis project is a production-grade evaluation pipeline designed to audit Chatbot conversations for Hallucinations and Relevance. Unlike simple scripts, this is an asynchronous microservice architecture engineered to handle millions of daily conversations with near-zero latency impact on the user.🚀 1. Local Setup InstructionsFollow these steps to get the system running on your local machine.PrerequisitesPython 3.9+GitInstallation StepsClone the Repositorygit clone <your-repo-url>
+cd llm-evaluator
+Create Virtual Environmentpython -m venv venv
 
-![alt text](image.png)
+# Windows:
+.\venv\Scripts\activate
+
+# Mac/Linux:
+source venv/bin/activate
+Install Dependenciespip install -r requirements.txt
+Configure EnvironmentCreate a .env file in the root directory and add your Groq API Key:GROQ_API_KEY=gsk_... (your key here)
+ENV=development
+Run the Server# Starts the FastAPI Server on Port 8000 with Hot Reload
+uvicorn src.main:app --reload
+Run the Test SuiteOpen a new terminal window (keep the server running) and execute:python tests/test.py
+
+### **Estimated Costs for 1 Million Daily Users**
+| Metric | Value |
+| :--- | :--- |
+| **Daily Traffic** | 1,000,000 Conversations |
+| **Audit Volume (10% Sample)** | 100,000 Audits / Day |
+| **Cache Hit Rate** | ~30% (Estimated) |
+| **Net LLM Calls** | 70,000 / Day |
+| **Avg Cost / Audit** | $0.00016 |
+| **Daily LLM Cost** | ~$11.20 |
+| **Monthly LLM Cost** | **~$336.00** |
