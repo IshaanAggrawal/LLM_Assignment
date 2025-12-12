@@ -40,7 +40,6 @@ class AuditService:
         """
 
     async def evaluate_interaction(self, request: EvaluationRequest) -> EvaluationResult:
-        # --- TIMER START ---
         start_time = time.perf_counter()
         chat_latency = calculate_latency(request.user_timestamp, request.ai_timestamp)
         
@@ -49,7 +48,7 @@ class AuditService:
         
         if cached_data:
             end_time = time.perf_counter()
-            print("⚡ Cache Hit! Skipping LLM.")
+            print("Cache Hit! Skipping LLM.")
             
             # We reconstruct the result using the *Cached Scores* # but the *Current Context* (like conversation_id and execution time)
             return EvaluationResult(
