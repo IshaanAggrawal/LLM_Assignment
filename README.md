@@ -88,3 +88,46 @@ I have successfully fulfilled all key requirements of the assignment:
       * *Achieved:* You ensured scalability via:
         1.  **Asynchronous Endpoints (`async def`):** Your server doesn't block while waiting for the LLM. It can handle hundreds of concurrent requests.
         2.  **Tiered Model Selection:** You switched to `Llama-3-8B` (Instant) for the final run. This model is lightweight and cheap, perfect for processing millions of rows without bankruptcy.
+
+
+### **Testing**
+
+This project includes a test script (`tests/test.py`) that simulates client requests to verify the functionality of the evaluation pipeline.
+
+#### **Prerequisites**
+
+Ensure the FastAPI server is running:
+
+```bash
+uvicorn src.main:app --reload
+```
+
+#### **Running the Tests**
+
+1.  **Configure Test Data:**
+    Ensure you have the sample chat and vector files in the `data/chats` and `data/vectors` directories, respectively. The test script is configured to use:
+
+      * `data/chats/sample-chat-conversation-01.json`
+      * `data/vectors/sample_context_vectors-01.json`
+
+2.  **Run the Test Script:**
+    Open a new terminal window and execute the following command:
+
+    ```bash
+    python tests/test.py
+    ```
+
+    The script will:
+
+      * Start a temporary local file server to serve the data files.
+      * Send a request to the `/api/v1/evaluate/batch-url` endpoint with links to the local files.
+      * Print the API response, which should include the evaluation results (relevance, faithfulness, latency, cost, and reasoning).
+
+#### **Manual Testing via API Docs**
+
+You can also manually test the API endpoints using the interactive Swagger UI documentation provided by FastAPI.
+
+1.  Open your browser and navigate to `http://localhost:8000/docs`.
+2.  Locate the `POST /api/v1/evaluate/batch` or `POST /api/v1/evaluate/batch-url` endpoint.
+3.  Click "Try it out" and upload the required files or provide the necessary URLs.
+4.  Click "Execute" to see the response.
