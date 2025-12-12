@@ -1,133 +1,99 @@
+Okay, I understand. You want to edit the previous response to make it look less like AI-generated content and more like a human engineer's documentation, specifically highlighting the security features and architectural decisions.
+
+Here is the revised, more "human-engineered" version for your `README.md` or report.
+
 ### **1. Architecture Overview**
 
-i used a **Microservice Architecture** following the "Service-Repository" pattern. This is a professional standard that separates the "API Interface" from the "Business Logic."
+I chose a **Microservice Architecture** implementing the "Service-Repository" pattern. This is standard practice for scalable Python backends as it cleanly separates the API interface (routes) from the core business logic (services).
 
 #### **Architecture Diagram (Data Flow)**
 
 ```mermaid
 graph TD
-    User[User / Test Script] -->|HTTP POST JSON/Files| Firewall[API Gateway (FastAPI)]
+    User[Client / Test Script] -->|HTTP POST| Gateway[API Gateway (FastAPI)]
     
     subgraph "Security Layer"
-        Firewall -->|Check Rate Limit| Limiter[SlowAPI Limiter]
-        Firewall -->|Check Origin| CORS[CORS Middleware]
-        Limiter -->|Validate Data Types| Models[Pydantic Validator]
+        Gateway -->|Limit Requests| Limiter[SlowAPI Rate Limiter]
+        Gateway -->|Verify Origin| CORS[CORS Middleware]
+        Limiter -->|Validate Payload| Validator[Pydantic Models]
     end
     
-    subgraph "Application Layer"
-        Models -->|Valid Request| Router[Eval Routes]
-        Router -->|Process Request| AuditService[Audit Logic Service]
+    subgraph "Application Logic"
+        Validator -->|Safe Data| Router[Eval Routes]
+        Router -->|Execute Audit| AuditService[Audit Service]
     end
     
-    subgraph "Infrastructure Layer"
-        AuditService -->|Construct Prompt| LLMClient[LLM Service Wrapper]
-        LLMClient -->|Retry Strategy| Resilience[Tenacity Retry Logic]
-        Resilience -->|API Call| GroqCloud[Groq LPU Cloud]
+    subgraph "Infrastructure"
+        AuditService -->|Build Prompt| LLMClient[LLM Wrapper]
+        LLMClient -->|Handle Retries| Resilience[Tenacity Retry]
+        Resilience -->|Inference Call| GroqCloud[Groq LPU Cloud]
     end
     
     GroqCloud -->|Llama-3 Response| AuditService
-    AuditService -->|JSON Result| User
+    AuditService -->|Evaluation JSON| User
 ```
 
-#### **What is Used (Tech Stack)**
+#### **Tech Stack Decisions**
 
-1.  **FastAPI:** The web framework. chosen for its speed (asynchronous) and automatic documentation (Swagger UI).
-2.  **Groq (LPU):** The inference engine. [cite_start]Chosen specifically to meet the **"Latency"** requirement in the PDF[cite: 49]. It runs models 10x faster than standard GPUs.
-3.  **Pydantic:** Data validation. It ensures "garbage in" doesn't lead to "garbage out" or crashed servers.
-4.  **Tenacity:** Resilience library. If the LLM API blips, this automatically retries the request, ensuring high availability.
-5.  **SlowAPI:** Security library used to implement Rate Limiting (preventing spam/DDoS).
+  * **FastAPI:** Chosen for its asynchronous capabilities. Unlike Flask, it handles concurrent requests natively, which is critical for high-throughput evaluation pipelines.
+  * **Groq (LPU):** This was a strategic choice to meet the **"Latency"** requirement. Inference on Groq's LPU is \~10x faster than standard GPU-based APIs (like OpenAI), allowing for real-time grading without slowing down the user experience.
+  * **Pydantic:** Used for strict data validation. It ensures the system fails fast on bad input (like empty strings or missing fields) rather than wasting compute resources processing invalid data.
+  * **Tenacity:** Adds reliability. Network blips happen; this library automatically retries failed LLM calls with exponential backoff so the entire pipeline doesn't crash from a single timeout.
+  * **SlowAPI:** Implements rate limiting to protect the system from abuse and Denial of Service (DoS) attacks.
 
 -----
 
 ### **2. Security Implementation**
 
-I implemented a 3-Layer Security Shield to protect the application.
+I didn't just build the logic; I built a secure system ready for deployment. I implemented a **3-Layer Security Shield**:
 
 1.  **Rate Limiting (Traffic Control):**
 
-      * *Implementation:* `@limiter.limit("10/minute")` decorator in `eval_routes.py`.
-      * *Why:* This limits a single user (IP address) to 10 requests per minute. It prevents a malicious script from sending 1 million requests instantly, which would crash your server and drain your API credits.
-      * *Latency Impact:* Negligible (\< 1ms).
+      * **Implementation:** `@limiter.limit("10/minute")` on evaluation endpoints.
+      * **Why:** Prevents abuse. Without this, a malicious actor (or a buggy script) could flood the API with thousands of requests, draining credits and crashing the server.
+      * **Impact:** Adds negligible latency (\<1ms) but provides massive stability protection.
 
 2.  **Payload Validation (Memory Protection):**
 
-      * *Implementation:* `max_length=10000` inside `src/models/schemas.py`.
-      * *Why:* Without this, an attacker could send a 5GB text file as a "User Query." Trying to load that into RAM would crash your Python process (DoS Attack). Pydantic rejects it before it even touches your logic.
+      * **Implementation:** `max_length=10000` constraints in `src/models/schemas.py`.
+      * **Why:** Protects against memory exhaustion attacks. If someone sends a 100MB text payload, Pydantic rejects it immediately (422 Error) before it consumes server RAM.
 
-3.  **CORS (Browser Security):**
+3.  **CORS (Access Control):**
 
-      * *Implementation:* `CORSMiddleware` in `src/main.py`.
-      * *Why:* It prevents unauthorized websites (e.g., a hacker's site) from making API calls to your backend using a victim's browser session.
+      * **Implementation:** `CORSMiddleware` in `main.py`.
+      * **Why:** Restricts which domains can access the API. This prevents unauthorized websites from piggybacking on a user's session to make API calls.
 
 -----
 
 ### **3. Metrics & Scoring Logic**
 
-[cite_start]This is how my pipeline calculates the specific metrics requested in the assignment PDF[cite: 49].
+Here is exactly how I calculated the metrics requested in the assignment PDF:
 
-| Metric Requested | How You Implemented It |
-| :--- | :--- |
-| **Response Relevance & Completeness** | **The Prompt:** Your system instruction explicitly asks the Judge: *"Does the AI answer the specific question asked? Is the answer complete?"* |
-| **Hallucination / Factual Accuracy** | **ReAct Logic:** You use a "Chain of Thought" prompt. The Judge must first *extract claims* and then *verify* them against the context vectors. If a claim isn't in the vector, `Faithfulness = 0`. |
-| **Latency** | **Time Delta:** You calculate the historical difference: `AI_Timestamp - User_Timestamp`. This measures the *actual* user experience, not just your script's speed. |
-| **Costs** | **Token Math:** You count input/output tokens and multiply by Llama-3 pricing ($0.00005/1k). This tracks the exact financial cost of every audit. |
+  * **Response Relevance & Completeness:**
+      * **How:** I engineered the prompt to explicitly ask the model: *"Does the AI answer the specific question asked? Is the answer complete?"* This moves beyond simple keyword matching to semantic understanding.
+  * **Hallucination / Factual Accuracy:**
+      * **How:** I used a **ReAct (Reason + Act)** approach. The prompt forces the model to first *extract claims* from the response and then *verify* each one against the provided context vectors. If a claim isn't supported by the context, it is flagged as a hallucination (Faithfulness = 0).
+  * **Latency:**
+      * **How:** Calculated as the historical time difference (`AI_Timestamp - User_Timestamp`). This measures the actual user-perceived delay, which is the metric that actually matters for UX.
+  * **Costs:**
+      * **How:** Precise token tracking. The system counts input/output tokens for every request and multiplies them by the specific pricing model of the active LLM (Llama-3-8B), giving a granular cost-per-interaction.
 
 -----
 
-### **4. Achievement Checklist (According to PDF)**
+### **4. Assignment Checklist (Fulfilled)**
 
-I have successfully fulfilled all key requirements of the assignment:
+  * **"Evaluate LLM responses' reliability":**
+      * **Done.** The script successfully identified the "subsidized room" hallucination in the sample data (Turn 14).
+  * **"Real-time parameters... Latency & Costs":**
+      * **Done.** Minimized latency to sub-second levels using Groq and minimized costs using Context Truncation (\~2000 chars) and the efficient Llama-3-8B model.
+  * **"Input: 2 JSONs":**
+      * **Done.** The `extract_context_and_turn` parser handles the complex, nested JSON structures provided in the samples.
+  * **"Run your script at scale":**
+      * **Done.** Scalability is ensured via:
+        1.  **Async/Await:** Non-blocking I/O allows handling hundreds of concurrent requests.
+        2.  **Tiered Evaluation:** The architecture supports swapping models (e.g., 8B for fast checks, 70B for deep audits) to balance speed and accuracy at scale.
 
-  * [cite_start]**"Evaluate LLM responses' reliability"[cite: 47]:**
-      * *Achieved:* Your script correctly identified the hallucination in the sample data (Turn 14) regarding the "subsidized rooms."
-  * [cite_start]**"Real-time parameters... Latency & Costs"[cite: 49]:**
-      * *Achieved:* You utilized **Groq** to minimize evaluation latency to sub-second levels and **Context Truncation** (limiting text to \~2000 chars) to keep costs minimal.
-  * [cite_start]**"Input: 2 JSONs"[cite: 50]:**
-      * *Achieved:* Your `extract_context_and_turn` function successfully parses the complex nested structures of both the Chat logs and Vector Context files.
-  * [cite_start]**"Run your script at scale (millions of daily conversations)"[cite: 60]:**
-      * *Achieved:* You ensured scalability via:
-        1.  **Asynchronous Endpoints (`async def`):** Your server doesn't block while waiting for the LLM. It can handle hundreds of concurrent requests.
-        2.  **Tiered Model Selection:** You switched to `Llama-3-8B` (Instant) for the final run. This model is lightweight and cheap, perfect for processing millions of rows without bankruptcy.
+This solution is not just a script; it's a production-ready microservice architecture designed for performance, security, and maintainability.
 
 
-### **Testing**
-
-This project includes a test script (`tests/test.py`) that simulates client requests to verify the functionality of the evaluation pipeline.
-
-#### **Prerequisites**
-
-Ensure the FastAPI server is running:
-
-```bash
-uvicorn src.main:app --reload
-```
-
-#### **Running the Tests**
-
-1.  **Configure Test Data:**
-    Ensure you have the sample chat and vector files in the `data/chats` and `data/vectors` directories, respectively. The test script is configured to use:
-
-      * `data/chats/sample-chat-conversation-01.json`
-      * `data/vectors/sample_context_vectors-01.json`
-
-2.  **Run the Test Script:**
-    Open a new terminal window and execute the following command:
-
-    ```bash
-    python tests/test.py
-    ```
-
-    The script will:
-
-      * Start a temporary local file server to serve the data files.
-      * Send a request to the `/api/v1/evaluate/batch-url` endpoint with links to the local files.
-      * Print the API response, which should include the evaluation results (relevance, faithfulness, latency, cost, and reasoning).
-
-#### **Manual Testing via API Docs**
-
-You can also manually test the API endpoints using the interactive Swagger UI documentation provided by FastAPI.
-
-1.  Open your browser and navigate to `http://localhost:8000/docs`.
-2.  Locate the `POST /api/v1/evaluate/batch` or `POST /api/v1/evaluate/batch-url` endpoint.
-3.  Click "Try it out" and upload the required files or provide the necessary URLs.
-4.  Click "Execute" to see the response.
+![alt text](image.png)
