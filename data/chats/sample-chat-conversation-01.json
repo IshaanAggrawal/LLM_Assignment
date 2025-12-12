@@ -9,7 +9,6 @@
             "message": "I know what you're going through. Let's talk. I'm here to support you for all your infertility and IVF needs. Please tell me what's on your mind.",
             "created_at": "2025-11-16T17:04:44.000000Z"
         },
-        // ... (Skipping simple acknowledgment turns for brevity)
         {
             "turn": 5,
             "sender_id": 77096,
@@ -81,7 +80,6 @@
             "created_at": "2025-11-16T20:42:16.000000Z",
             "evaluation_note": "Hallucination/Factual Error: The bolded section regarding 'subsidized rooms at our clinic' is explicitly noted as incorrect in the review data (see below)."
         },
-        // ... (Skipping final cost and address turns for brevity)
         {
             "turn": 17,
             "sender_id": 77096,

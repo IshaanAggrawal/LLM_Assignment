@@ -24,3 +24,8 @@ class EvaluationResult(BaseModel):
     estimated_cost_usd: float
     reasoning: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+# --- NEW: Add this for Link Support ---
+class BatchLinkRequest(BaseModel):
+    chat_url: str
+    vector_url: str

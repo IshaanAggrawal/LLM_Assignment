@@ -8,36 +8,38 @@ class AuditService:
         self.llm_client = GroqClient()
 
     def _calculate_cost(self, input_toks: int, output_toks: int) -> float:
+        """Calculates cost based on Groq/Llama-3 pricing."""
         in_cost = (input_toks / 1000) * settings.INPUT_COST_PER_1K
         out_cost = (output_toks / 1000) * settings.OUTPUT_COST_PER_1K
         return round(in_cost + out_cost, 6)
 
-    def _build_react_prompt(self, req: EvaluationRequest) -> str:
-        # Truncate context to prevent token overflow (Security Guardrail)
+    def _build_audit_prompt(self, req: EvaluationRequest) -> str:
+        # Truncate context to prevent token overflow (Scalability Feature)
         safe_context = [txt[:2000] for txt in req.context_texts[:5]] 
-        context_block = "\n".join([f"- {txt}" for txt in safe_context])
+        context_block = "\n".join([f"[{i+1}] {txt}" for i, txt in enumerate(safe_context)])
         
         return f"""
-        ROLE: Expert Legal Auditor.
-        TASK: Assess 'AI Response' reliability against 'Ground Truth Context'.
+        ROLE: Strict Compliance Auditor for a Medical/Legal Chatbot.
         
-        DATA:
-        [Query]: "{req.user_query}"
-        [Response]: "{req.ai_response}"
-        [Context]:
+        INPUT DATA:
+        [User Query]: "{req.user_query}"
+        [AI Response]: "{req.ai_response}"
+        [Retrieval Context]:
         {context_block}
         
-        METHODOLOGY (Chain of Thought):
-        1. Extract all factual claims from [Response].
-        2. Verify each claim against [Context].
-        3. If a claim is missing from Context, Faithfulness = 0.
-        4. If Response ignores Query, Relevance = 0.
+        EVALUATION CRITERIA:
+        1. RELEVANCE & COMPLETENESS: 
+           - Does the AI answer the specific question asked? 
+           - Is the answer complete? (Score 0 if it ignores key details from context).
+        2. FAITHFULNESS (Hallucination Check): 
+           - Every claim in the AI response must be supported by the [Retrieval Context]. 
+           - If the AI invents a fact (e.g., a price, location, or service) NOT in the text, it is a Hallucination (Score 0).
         
-        OUTPUT JSON:
+        OUTPUT FORMAT (JSON Only):
         {{
             "relevance_score": <float 0.0-1.0>,
             "faithfulness_score": <float 0.0-1.0>,
-            "reasoning": "<Concise verification steps>"
+            "reasoning": "Concise explanation. Quote the context that supports or contradicts the response."
         }}
         """
 
@@ -46,14 +48,13 @@ class AuditService:
         latency = calculate_latency(request.user_timestamp, request.ai_timestamp)
 
         # 2. LLM Evaluation
-        prompt = self._build_react_prompt(request)
+        prompt = self._build_audit_prompt(request)
         llm_data = self.llm_client.get_json_response(prompt)
+        content = llm_data["content"]
         
         # 3. Cost Calculation
         cost = self._calculate_cost(llm_data["input_tokens"], llm_data["output_tokens"])
-        content = llm_data["content"]
 
-        # 4. Result Construction
         return EvaluationResult(
             conversation_id=request.conversation_id,
             relevance_score=content.get("relevance_score", 0),

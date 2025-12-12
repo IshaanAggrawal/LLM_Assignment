@@ -1,52 +1,61 @@
+import threading
+import http.server
+import socketserver
 import requests
-import os
+import time
 import json
+import os
 
-# Configuration
-API_URL = "http://localhost:8000/api/v1/evaluate/batch"
-CHAT_PATH = "data/chats/sample-chat-conversation-01.json"
-VECTOR_PATH = "data/vectors/sample_context_vectors-01.json"
+API_URL = "http://localhost:8000/api/v1/evaluate/batch-url"
+FILE_SERVER_PORT = 9000
+DATA_DIR = "data" 
 
-def run_batch_test():
-    # 1. Verify files exist
-    if not os.path.exists(CHAT_PATH) or not os.path.exists(VECTOR_PATH):
-        print("Error: Could not find data files.")
-        print(f"Checked: {CHAT_PATH}")
-        print(f"Checked: {VECTOR_PATH}")
-        return
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass 
 
-    print(f"--- Uploading Batch Files to {API_URL} ---")
-    print(f"Chat File:   {CHAT_PATH}")
-    print(f"Vector File: {VECTOR_PATH}")
+def start_file_server():
+    """Starts a temporary HTTP server serving the 'data' directory"""
+    os.chdir(DATA_DIR) 
+    with socketserver.TCPServer(("", FILE_SERVER_PORT), QuietHandler) as httpd:
+        print(f"📂 Temporary File Server started at port {FILE_SERVER_PORT}...")
+        httpd.serve_forever()
 
-    # 2. Prepare the files for upload
-    # We open them in binary mode ('rb') to ensure safe transmission
-    files = {
-        'chat_file': ('chat.json', open(CHAT_PATH, 'rb'), 'application/json'),
-        'vector_file': ('vectors.json', open(VECTOR_PATH, 'rb'), 'application/json')
+def run_simulation():
+    # 1. Start File Server in Background Thread
+    server_thread = threading.Thread(target=start_file_server, daemon=True)
+    server_thread.start()
+    time.sleep(1) 
+
+    # 2. Construct the "Fake" URLs
+    chat_url = f"http://localhost:{FILE_SERVER_PORT}/chats/sample-chat-conversation-02.json"
+    vector_url = f"http://localhost:{FILE_SERVER_PORT}/vectors/sample_context_vectors-02.json"
+
+    print(f"\n🔗 Testing Link Evaluation Route...")
+    print(f"Chat Link:   {chat_url}")
+    print(f"Vector Link: {vector_url}")
+
+    # 3. Call the API
+    payload = {
+        "chat_url": chat_url,
+        "vector_url": vector_url
     }
 
     try:
-        # 3. Send POST request
-        response = requests.post(API_URL, files=files)
+        response = requests.post(API_URL, json=payload)
         
-        # 4. Handle Response
         if response.status_code == 200:
-            print("\n✅ Success! Evaluation Result:")
+            print("\n✅ SUCCESS! The API downloaded and processed the links.")
             print(json.dumps(response.json(), indent=2))
         else:
-            print(f"\n❌ Error {response.status_code}:")
+            print(f"\n❌ FAILED with code {response.status_code}")
             print(response.text)
-
+            
     except requests.exceptions.ConnectionError:
-        print("\n❌ Connection Failed. Is the server running?")
-        print("Run: uvicorn src.main:app --reload")
-    except Exception as e:
-        print(f"\n❌ Unexpected Error: {e}")
-    finally:
-        # Always close file handles
-        files['chat_file'][1].close()
-        files['vector_file'][1].close()
+        print("\n❌ Error: Main API (port 8000) is not running.")
 
 if __name__ == "__main__":
-    run_batch_test()
+    if not os.path.exists("data"):
+        print("Error: Run this script from the project root (where 'data' folder is).")
+    else:
+        run_simulation()
