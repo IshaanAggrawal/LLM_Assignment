@@ -8,31 +8,28 @@ I chose a **Microservice Architecture** implementing the "Service-Repository" pa
 ```mermaid
 graph TD
     User[User Client] -->|1. Chat Message| API[FastAPI Gateway]
-    
+
     subgraph "Hot Path (Real-Time Response)"
         API -->|2. Generate Reply| ChatBot[Chatbot Engine]
-        ChatBot -->|3. Response (<2s)| User
+        ChatBot -->|3. Response < 2 sec| User
     end
+
     subgraph "Cold Path (Async Evaluation)"
         API -.->|4. Fire-and-Forget| Queue[Background Task Queue]
         Queue -->|5. Process| Worker[Audit Service]
-        
-        %% Layer 0: Cache
+
         Worker -->|Layer 0| Cache{Check Cache}
-        Cache -->|Hit (0ms)| DB[(Results DB)]
-        
-        %% Layer 1: Guardrails
+        Cache -->|Hit| DB[(Results DB)]
+
         Cache -->|Miss| L1{Layer 1: Guardrails}
         L1 -->|Fail| DB
-        
-        %% Layer 2: The Scout
-        L1 -->|Pass| L2{Layer 2: Llama-8B}
-        L2 -->|Confident (>0.9)| DB
-        
-        %% Layer 3: The Judge
-        L2 -->|Unsure (<0.9)| L3[Layer 3: Llama-70B]
+
+        L1 -->|Pass| L2{Layer 2: Llama-3-8B (Fast Evaluator)}
+        L2 -->|Confident > 0.9| DB
+
+        L2 -->|Unsure < 0.9| L3[Llama-3­-70B (Judge)]
         L3 -->|Final Verdict| DB
-        L3 -.->|Update| Cache
+        L3 -.->|Update Cache| Cache
     end
 ```
 
