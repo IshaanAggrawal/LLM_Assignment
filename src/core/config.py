@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    PROJECT_NAME: str = "ClauseSense Evaluator"
+    PROJECT_NAME: str = "Beyond Evaluator"
     VERSION: str = "1.0.0"
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     ENV: str = os.getenv("ENV", "development")
