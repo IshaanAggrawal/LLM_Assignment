@@ -31,6 +31,7 @@ graph TD
     
     GroqCloud -->|Llama-3 Response| AuditService
     AuditService -->|Evaluation JSON| User
+
 ```
 
 #### **Tech Stack Decisions**
