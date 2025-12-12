@@ -6,7 +6,6 @@ import time
 import json
 import os
 
-# Configuration
 API_URL = "http://localhost:8000/api/v1/evaluate/batch-url"
 FILE_SERVER_PORT = 9000
 DATA_DIR = "data" 

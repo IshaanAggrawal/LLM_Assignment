@@ -10,7 +10,6 @@ router = APIRouter()
 audit_service = AuditService()
 limiter = Limiter(key_func=get_remote_address)
 
-# --- HELPER FUNCTION (Restored) ---
 def extract_context_and_turn(chat_data, vector_data, target_turn):
     try:
         if 'data' in vector_data and 'vector_data' in vector_data['data']:
@@ -38,7 +37,6 @@ def extract_context_and_turn(chat_data, vector_data, target_turn):
         print(f"Parsing Error: {e}")
         return None
 
-# --- ORIGINAL ROUTES (Restored for test.py) ---
 
 @router.post("/evaluate", response_model=EvaluationResult)
 @limiter.limit("10/minute") 
@@ -85,13 +83,10 @@ async def evaluate_batch_url(request: Request, payload: BatchLinkRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-# --- NEW INDUSTRY STANDARD ROUTE (Async) ---
 
 async def persist_evaluation(payload: EvaluationRequest):
-    # This runs in the background!
     result = await audit_service.evaluate_interaction(payload)
-    print(f"✅ [Background Audit] Chat {payload.conversation_id} Score: {result.faithfulness_score} (Latency: {result.eval_execution_seconds}s)")
-    # TODO: db.save(result)
+    print(f"[Background Audit] Chat {payload.conversation_id} Score: {result.faithfulness_score} (Latency: {result.eval_execution_seconds}s)")
 
 @router.post("/evaluate/stream")
 async def stream_evaluation(

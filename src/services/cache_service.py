@@ -43,5 +43,4 @@ class EvaluationCache:
             "usage_percent": (len(self._cache) / self.max_size) * 100
         }
 
-# Singleton Instance
 cache = EvaluationCache()

@@ -3,8 +3,6 @@ from src.models.schemas import EvaluationRequest, EvaluationResult
 from src.services.llm_service import GroqClient
 from src.utils.metrics import calculate_latency
 from src.core.config import settings
-
-# IMPORT YOUR CACHE
 from src.services.cache_service import cache 
 
 class AuditService:
@@ -47,7 +45,6 @@ class AuditService:
         chat_latency = calculate_latency(request.user_timestamp, request.ai_timestamp)
         
         # --- LAYER 0: CACHE CHECK (Zero Cost) ---
-        # Note: No 'await' because your cache is synchronous
         cached_data = cache.get(request.user_query, request.ai_response)
         
         if cached_data:
@@ -60,8 +57,8 @@ class AuditService:
                 relevance_score=cached_data["relevance_score"],
                 faithfulness_score=cached_data["faithfulness_score"],
                 chat_latency_seconds=chat_latency,
-                eval_execution_seconds=round(end_time - start_time, 4), # Very fast (~0.0001s)
-                estimated_cost_usd=0.0, # Free!
+                eval_execution_seconds=round(end_time - start_time, 4),
+                estimated_cost_usd=0.0, 
                 reasoning=cached_data["reasoning"],
                 evaluator_model="Cache-Hit" 
             )
@@ -106,7 +103,6 @@ class AuditService:
             total_input = llm_data["input_tokens"]
             total_output = llm_data["output_tokens"]
 
-        # --- METRICS & SAVING ---
         end_time = time.perf_counter()
         execution_time = round(end_time - start_time, 4)
         cost = self._calculate_cost(total_input, total_output)
@@ -122,8 +118,6 @@ class AuditService:
             evaluator_model=current_model
         )
 
-        # --- SAVE TO CACHE ---
-        # Store the dict representation for future lookups
         cache.set(request.user_query, request.ai_response, result_obj.dict())
         
         return result_obj
