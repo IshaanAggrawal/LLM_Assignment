@@ -1,20 +1,22 @@
+import time
 from src.models.schemas import EvaluationRequest, EvaluationResult
 from src.services.llm_service import GroqClient
 from src.utils.metrics import calculate_latency
 from src.core.config import settings
+
+# IMPORT YOUR CACHE
+from src.services.cache_service import cache 
 
 class AuditService:
     def __init__(self):
         self.llm_client = GroqClient()
 
     def _calculate_cost(self, input_toks: int, output_toks: int) -> float:
-        """Calculates cost based on Groq/Llama-3 pricing."""
         in_cost = (input_toks / 1000) * settings.INPUT_COST_PER_1K
         out_cost = (output_toks / 1000) * settings.OUTPUT_COST_PER_1K
         return round(in_cost + out_cost, 6)
 
     def _build_audit_prompt(self, req: EvaluationRequest) -> str:
-        # Truncate context to prevent token overflow (Scalability Feature)
         safe_context = [txt[:2000] for txt in req.context_texts[:5]] 
         context_block = "\n".join([f"[{i+1}] {txt}" for i, txt in enumerate(safe_context)])
         
@@ -28,38 +30,100 @@ class AuditService:
         {context_block}
         
         EVALUATION CRITERIA:
-        1. RELEVANCE & COMPLETENESS: 
-           - Does the AI answer the specific question asked? 
-           - Is the answer complete? (Score 0 if it ignores key details from context).
-        2. FAITHFULNESS (Hallucination Check): 
-           - Every claim in the AI response must be supported by the [Retrieval Context]. 
-           - If the AI invents a fact (e.g., a price, location, or service) NOT in the text, it is a Hallucination (Score 0).
+        1. RELEVANCE: Does it answer the specific question?
+        2. FAITHFULNESS: Is every claim supported by context?
         
         OUTPUT FORMAT (JSON Only):
         {{
             "relevance_score": <float 0.0-1.0>,
             "faithfulness_score": <float 0.0-1.0>,
-            "reasoning": "Concise explanation. Quote the context that supports or contradicts the response."
+            "reasoning": "Concise explanation."
         }}
         """
 
     async def evaluate_interaction(self, request: EvaluationRequest) -> EvaluationResult:
-        # 1. Metrics
-        latency = calculate_latency(request.user_timestamp, request.ai_timestamp)
+        # --- TIMER START ---
+        start_time = time.perf_counter()
+        chat_latency = calculate_latency(request.user_timestamp, request.ai_timestamp)
+        
+        # --- LAYER 0: CACHE CHECK (Zero Cost) ---
+        # Note: No 'await' because your cache is synchronous
+        cached_data = cache.get(request.user_query, request.ai_response)
+        
+        if cached_data:
+            end_time = time.perf_counter()
+            print("⚡ Cache Hit! Skipping LLM.")
+            
+            # We reconstruct the result using the *Cached Scores* # but the *Current Context* (like conversation_id and execution time)
+            return EvaluationResult(
+                conversation_id=request.conversation_id,
+                relevance_score=cached_data["relevance_score"],
+                faithfulness_score=cached_data["faithfulness_score"],
+                chat_latency_seconds=chat_latency,
+                eval_execution_seconds=round(end_time - start_time, 4), # Very fast (~0.0001s)
+                estimated_cost_usd=0.0, # Free!
+                reasoning=cached_data["reasoning"],
+                evaluator_model="Cache-Hit" 
+            )
 
-        # 2. LLM Evaluation
+        # --- LAYER 1: DETERMINISTIC GUARDRAILS ---
+        if len(request.ai_response.strip()) < 5:
+            end_time = time.perf_counter()
+            return EvaluationResult(
+                conversation_id=request.conversation_id,
+                relevance_score=0.0,
+                faithfulness_score=0.0,
+                chat_latency_seconds=chat_latency,
+                eval_execution_seconds=round(end_time - start_time, 4),
+                estimated_cost_usd=0.0,
+                reasoning="Layer 1 Violation: Response too short/empty.",
+                evaluator_model="Deterministic-Check"
+            )
+
+        # --- LAYER 2: THE SCOUT (Llama-8B) ---
         prompt = self._build_audit_prompt(request)
-        llm_data = self.llm_client.get_json_response(prompt)
+        current_model = settings.MODEL_TIER_1 
+        
+        llm_data = self.llm_client.get_json_response(prompt, model_id=current_model)
         content = llm_data["content"]
         
-        # 3. Cost Calculation
-        cost = self._calculate_cost(llm_data["input_tokens"], llm_data["output_tokens"])
+        relevance = content.get("relevance_score", 0)
+        faithfulness = content.get("faithfulness_score", 0)
+        
+        # --- LAYER 3: THE JUDGE (Llama-70B) ---
+        if relevance < 0.9 or faithfulness < 0.9:
+            print(f"⚠️ Layer 2 ({current_model}) Unsure. Escalating to Layer 3...")
+            current_model = settings.MODEL_TIER_3 
+            llm_data_l3 = self.llm_client.get_json_response(prompt, model_id=current_model)
+            
+            content = llm_data_l3["content"]
+            relevance = content.get("relevance_score", 0)
+            faithfulness = content.get("faithfulness_score", 0)
+            
+            total_input = llm_data["input_tokens"] + llm_data_l3["input_tokens"]
+            total_output = llm_data["output_tokens"] + llm_data_l3["output_tokens"]
+        else:
+            total_input = llm_data["input_tokens"]
+            total_output = llm_data["output_tokens"]
 
-        return EvaluationResult(
+        # --- METRICS & SAVING ---
+        end_time = time.perf_counter()
+        execution_time = round(end_time - start_time, 4)
+        cost = self._calculate_cost(total_input, total_output)
+
+        result_obj = EvaluationResult(
             conversation_id=request.conversation_id,
-            relevance_score=content.get("relevance_score", 0),
-            faithfulness_score=content.get("faithfulness_score", 0),
-            latency_seconds=latency,
+            relevance_score=relevance,
+            faithfulness_score=faithfulness,
+            chat_latency_seconds=chat_latency,
+            eval_execution_seconds=execution_time,
             estimated_cost_usd=cost,
-            reasoning=content.get("reasoning", "Analysis failed.")
+            reasoning=content.get("reasoning", "Analysis failed.") + f" [Final Decision: {current_model}]",
+            evaluator_model=current_model
         )
+
+        # --- SAVE TO CACHE ---
+        # Store the dict representation for future lookups
+        cache.set(request.user_query, request.ai_response, result_obj.dict())
+        
+        return result_obj

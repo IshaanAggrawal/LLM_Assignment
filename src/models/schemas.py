@@ -16,13 +16,22 @@ class EvaluationRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("AI Response cannot be empty")
         return v
+
 class EvaluationResult(BaseModel):
     conversation_id: int
     relevance_score: float = Field(..., ge=0, le=1)
     faithfulness_score: float = Field(..., ge=0, le=1)
-    latency_seconds: float
+    
+    # METRICS
+    chat_latency_seconds: float = Field(..., description="Historical time user waited")
+    eval_execution_seconds: float = Field(..., description="Actual time taken to audit")
+    
     estimated_cost_usd: float
     reasoning: str
+    
+    # RENAMED FIELD (Fixes Pydantic Warning)
+    evaluator_model: str 
+    
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class BatchLinkRequest(BaseModel):

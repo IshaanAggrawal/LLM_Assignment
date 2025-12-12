@@ -9,7 +9,18 @@ class Settings:
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     ENV: str = os.getenv("ENV", "development")
     
-    # Cost Constants (Llama-3.1-8B)
+    # --- MODEL TIERS (Updated from Screenshot) ---
+    # Tier 1: Fast & Cheap (Updated to match your available models)
+    MODEL_TIER_1: str = "llama-3.1-8b-instant"
+    
+    # Tier 2: Balanced (Optional/Fallback)
+    MODEL_TIER_2: str = "llama-3.3-70b-versatile" 
+    
+    # Tier 3: High Intelligence (Deep Reasoning)
+    MODEL_TIER_3: str = "llama-3.3-70b-versatile"
+    # ---------------------------------------------
+
+    # Cost Constants (Llama-3.1-8B Pricing)
     INPUT_COST_PER_1K: float = 0.00005
     OUTPUT_COST_PER_1K: float = 0.00008
 

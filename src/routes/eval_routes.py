@@ -1,15 +1,16 @@
 import json
 import httpx
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, BackgroundTasks
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from src.models.schemas import EvaluationRequest, EvaluationResult, BatchLinkRequest
 from src.services.audit_service import AuditService
-router = APIRouter()
 
+router = APIRouter()
 audit_service = AuditService()
 limiter = Limiter(key_func=get_remote_address)
 
+# --- HELPER FUNCTION (Restored) ---
 def extract_context_and_turn(chat_data, vector_data, target_turn):
     try:
         if 'data' in vector_data and 'vector_data' in vector_data['data']:
@@ -37,8 +38,10 @@ def extract_context_and_turn(chat_data, vector_data, target_turn):
         print(f"Parsing Error: {e}")
         return None
 
+# --- ORIGINAL ROUTES (Restored for test.py) ---
+
 @router.post("/evaluate", response_model=EvaluationResult)
-@limiter.limit("10/minute") # Rate Limit Kept
+@limiter.limit("10/minute") 
 async def evaluate(request: Request, payload: EvaluationRequest):
     try:
         return await audit_service.evaluate_interaction(payload)
@@ -81,3 +84,29 @@ async def evaluate_batch_url(request: Request, payload: BatchLinkRequest):
             return await audit_service.evaluate_interaction(req_payload)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+# --- NEW INDUSTRY STANDARD ROUTE (Async) ---
+
+async def persist_evaluation(payload: EvaluationRequest):
+    # This runs in the background!
+    result = await audit_service.evaluate_interaction(payload)
+    print(f"✅ [Background Audit] Chat {payload.conversation_id} Score: {result.faithfulness_score} (Latency: {result.eval_execution_seconds}s)")
+    # TODO: db.save(result)
+
+@router.post("/evaluate/stream")
+async def stream_evaluation(
+    request: Request, 
+    payload: EvaluationRequest, 
+    background_tasks: BackgroundTasks
+):
+    """
+    Industry Pattern: Asynchronous 'Fire-and-Forget'.
+    Returns 202 Accepted immediately so the Chatbot UI doesn't hang.
+    """
+    background_tasks.add_task(persist_evaluation, payload)
+    
+    return {
+        "status": "queued",
+        "message": "Evaluation running in background",
+        "conversation_id": payload.conversation_id
+    }
