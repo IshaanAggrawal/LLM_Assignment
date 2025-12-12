@@ -10,26 +10,26 @@ I chose a **Microservice Architecture** implementing the "Service-Repository" pa
 
 ```mermaid
 graph TD
-    User[Client / Test Script] -->|HTTP POST| Gateway[API Gateway (FastAPI)]
+    User[Client or Test Script] -->|HTTP POST| Gateway[API Gateway - FastAPI]
     
-    subgraph "Security Layer"
-        Gateway -->|Limit Requests| Limiter[SlowAPI Rate Limiter]
-        Gateway -->|Verify Origin| CORS[CORS Middleware]
-        Limiter -->|Validate Payload| Validator[Pydantic Models]
+    subgraph Security_Layer
+        Gateway -->|Rate Limit| Limiter[SlowAPI Rate Limiter]
+        Gateway -->|CORS Check| CORS[CORS Middleware]
+        Limiter -->|Validate Payload| Validator[Pydantic Validation]
     end
     
-    subgraph "Application Logic"
-        Validator -->|Safe Data| Router[Eval Routes]
-        Router -->|Execute Audit| AuditService[Audit Service]
+    subgraph Application_Logic
+        Validator -->|Valid Data| Router[Evaluation Router]
+        Router -->|Run Audit| AuditService[Audit Service]
     end
     
-    subgraph "Infrastructure"
+    subgraph Infrastructure
         AuditService -->|Build Prompt| LLMClient[LLM Wrapper]
-        LLMClient -->|Handle Retries| Resilience[Tenacity Retry]
-        Resilience -->|Inference Call| GroqCloud[Groq LPU Cloud]
+        LLMClient -->|Retry Logic| Resilience[Tenacity Retry System]
+        Resilience -->|Inference| GroqCloud[Groq LPU Cloud]
     end
     
-    GroqCloud -->|Llama-3 Response| AuditService
+    GroqCloud -->|LLM Output| AuditService
     AuditService -->|Evaluation JSON| User
 
 ```
